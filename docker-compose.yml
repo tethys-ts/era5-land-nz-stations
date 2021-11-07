@@ -1,0 +1,8 @@
+version: '3.3'
+
+services:
+  era5:
+    image: tethysts/era5-land-nz-stations-precip:1.0
+    volumes:
+        - "~/git/tethys/era5-land-nz-stations/parameters.yml:/parameters.yml"
+        - "~/git/tethys/era5-land-nz-stations/remote.yml:/remote.yml"

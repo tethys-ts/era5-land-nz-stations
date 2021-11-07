@@ -1,22 +1,13 @@
 """
-Created by Mike Kittridge on 2020-09-01.
-Contains the code to train and test the flood forecast model.
+Created by Mike Kittridge on 2021-10-01.
 
 """
 import os
 import numpy as np
 import pandas as pd
-import requests
-import zstandard as zstd
-import pickle
 from scipy import log, exp, mean, stats, special
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestRegressor, ExtraTreesRegressor, GradientBoostingRegressor, HistGradientBoostingRegressor, AdaBoostRegressor, ExtraTreesRegressor, RandomForestClassifier
-import matplotlib.pyplot as plt
-# from sklearn.inspection import permutation_importance
-from scipy.signal import argrelextrema
-# %matplotlib inline
-import orjson
 import xarray as xr
 from tethysts import Tethys, utils
 import yaml
@@ -32,18 +23,21 @@ import traceback
 
 base_path = os.path.realpath(os.path.dirname(__file__))
 
-with open(os.path.join(base_path, 'parameters.yml')) as param:
-    param = yaml.safe_load(param)
+with open(os.path.join(base_path, 'parameters.yml')) as param1:
+    param = yaml.safe_load(param1)
 
 source = param['source']
 datasets = source['datasets'].copy()
 public_url = source['public_url']
-s3_remote = param['remote']['s3'].copy()
 processing_code = source['processing_code']
 local_tz = 'Etc/GMT-12'
 version = source['version']
 run_date = source['run_date']
 
+with open(os.path.join(base_path, 'remote.yml')) as param2:
+    remote = yaml.safe_load(param2)
+
+s3_remote = remote['remote']['s3'].copy()
 
 min_year_range = 10
 
@@ -322,7 +316,7 @@ try:
 except Exception as err:
     # print(err)
     print(traceback.format_exc())
-    tu.misc.email_msg(param['remote']['email']['sender_address'], param['remote']['email']['sender_password'], param['remote']['email']['receiver_address'], 'Failure on tethys-extraction-flownat', traceback.format_exc(), param['remote']['email']['smtp_server'])
+    tu.misc.email_msg(remote['remote']['email']['sender_address'], remote['remote']['email']['sender_password'], remote['remote']['email']['receiver_address'], 'Failure on tethys-extraction-flownat', traceback.format_exc(), remote['remote']['email']['smtp_server'])
 
 try:
 
@@ -340,15 +334,4 @@ try:
 except Exception as err:
     # print(err)
     print(traceback.format_exc())
-    tu.misc.email_msg(param['remote']['email']['sender_address'], param['remote']['email']['sender_password'], param['remote']['email']['receiver_address'], 'Failure on tethys-extraction-flownat agg processes', traceback.format_exc(), param['remote']['email']['smtp_server'])
-
-
-
-
-
-
-
-
-
-
-
+    tu.misc.email_msg(remote['remote']['email']['sender_address'], remote['remote']['email']['sender_password'], remote['remote']['email']['receiver_address'], 'Failure on tethys-extraction-flownat agg processes', traceback.format_exc(), remote['remote']['email']['smtp_server'])

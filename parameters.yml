@@ -1,0 +1,39 @@
+source:
+  public_url: https://b2.nzrivers.xyz
+  processing_code: 6
+  version: 3
+  run_date: 2021-11-05T05:11:15
+
+  datasets:
+    precipitation:
+      - feature: atmosphere
+        parameter: precipitation
+        method: simulation
+        product_code: nz station extension v01
+        owner: Headwaters Hydrology
+        aggregation_statistic: cumulative
+        frequency_interval: '24H'
+        utc_offset: '12H'
+        units: m^3
+        license: https://creativecommons.org/licenses/by/4.0/
+        spatial_distribution: sparse
+        geometry_type: Point
+        grouping: none
+        cf_standard_name: precipitation_amount
+        precision: 0.1
+        attribution: Data licenced by Headwaters Hydrology
+        description: This dataset was created by building a random forest model of ERA5-Land to the individual stations of several precipitation sensor_recording datasets from around New Zealand. The model takes the surrounding ERA5-Land stations from measurement stations with at least 10 years of measurement data and creates a new dataset at those measurement stations for the entire ERA5-Land record (back to 1950). Normalised absolute errors and biases are provided as well as the residuals for all data points (modeled - measured).
+        properties:
+          encoding:
+            precipitation:
+              scale_factor: 0.1
+              dtype: int16
+              _FillValue: -9999
+            residuals:
+              scale_factor: 0.1
+              dtype: int16
+              _FillValue: -9999
+          attrs:
+            residuals:
+              long_name: 'residuals'
+              description: The residuals are simply the difference of the measured and the modeled values (modeled - measured).
