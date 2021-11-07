@@ -42,12 +42,8 @@ s3_remote = param['remote']['s3'].copy()
 processing_code = source['processing_code']
 local_tz = 'Etc/GMT-12'
 version = source['version']
+run_date = source['run_date']
 
-
-
-# source = param['source']
-
-# public_url = 'https://b2.tethys-ts.xyz'
 
 min_year_range = 10
 
@@ -146,6 +142,27 @@ for island in islands.island:
 
 era5_stn_ids = [s['station_id'] for s in era5_stns]
 
+## If stations are duplicated, remove the one with less data
+stns_t1 = []
+
+for v in p_stns2:
+    d1 = {'station_id': v['station_id'], 'count': v['stats']['count']}
+    stns_t1.append(d1)
+
+df_stns1 = pd.DataFrame(stns_t1).sort_values('count').drop_duplicates(subset=['station_id'], keep='last')
+
+stns2 = []
+stn_list = []
+
+for v in p_stns2:
+    stn_id = v['station_id']
+    stn_count = df_stns1.loc[df_stns1['station_id'] == stn_id, 'count'].iloc[0]
+    if v['stats']['count'] == stn_count:
+        if stn_id not in stn_list:
+            stns2.append(v)
+            stn_list.append(stn_id)
+
+
 ################################################
 ### Run through all stations
 
@@ -156,7 +173,7 @@ datasets['precipitation'][0].update({'parent_datasets': parent_datasets})
 
 try:
     ### Initialize
-    run_date = pd.Timestamp.today(tz='utc').round('s').tz_localize(None)
+    # run_date = pd.Timestamp.today(tz='utc').round('s').tz_localize(None)
     # to_date = (run_date - pd.tseries.offsets.MonthEnd(1)).floor('D')
 
     titan = tu.titan.Titan()
@@ -169,14 +186,27 @@ try:
     titan.load_run_date(processing_code, run_date)
 
 
-    for stn in p_stns2:
+    for stn in stns2:
         print(stn)
         p_data1 = tethys1.get_results(stn['dataset_id'], stn['station_id'], squeeze_dims=True)
-        p_data2 = p_data1['precipitation'].drop(['geometry', 'height']).to_dataframe().reset_index().dropna()
-        times = p_data2['time'][-5:-1]
-        freq = pd.infer_freq(times)
+        p_data2 = p_data1['precipitation'].drop(['geometry', 'height']).to_dataframe().dropna()
 
-        if freq == 'H':
+        ## Correct for data that is not hourly...
+        r1 = p_data2.rolling(5, center=True)
+
+        r2 = [pd.infer_freq(r.index) for r in r1]
+
+        r3 = pd.Series(r2, index=p_data2.index)
+        r3.loc[r3.isnull()] = 'Y'
+        r3.loc[r3.str.contains('H')] = 'H'
+        r3.loc[~(r3.str.contains('H') | r3.str.contains('Y'))] = 'D'
+        r3.loc[r3.str.contains('Y')] = np.nan
+        r3 = r3.fillna('ffill')
+        r4 = r3 == 'H'
+
+        p_data3 = p_data2[r4].copy()
+
+        if not p_data3.empty:
             g1 = str(p_data1.geometry.values)
             geo = wkb.loads(g1, hex=True)
             poly_geo = mapping(geo.buffer(0.15))
@@ -186,32 +216,18 @@ try:
 
             era1 = tethys1.get_bulk_results(era5_dataset['dataset_id'], era_stn_ids, squeeze_dims=True).dropna('time')
 
+            ## Adjust times to UTC+12
+            p_data3.index = p_data3.index + pd.DateOffset(hours=12)
+            era1['time'] = pd.to_datetime(era1['time']) + pd.DateOffset(hours=12)
+
+            ## Additional processing
             era2 = era1.drop('height').to_dataframe().reset_index().drop(['lat', 'lon'], axis=1)
             era3 = era2.set_index(['station_id', 'time'])['precipitation'].unstack(0)
 
-            # p_data2 = p_data1[p_data1.station_id == s['station_id']][['time', 'precipitation']].set_index('time')['precipitation'].copy()
-
-            era4 = era3[era3.index.isin(p_data2.time)].copy()
-            p_data3 = p_data2[p_data2.time.isin(era4.index)].set_index('time').copy()
+            era4 = era3[era3.index.isin(p_data3.index)].copy()
+            p_data3 = p_data3[p_data3.index.isin(era4.index)].copy()
 
             if not p_data3.empty:
-
-                ## Correct for data that is not hourly...
-                r1 = p_data3.rolling(5, center=True)
-
-                r2 = [pd.infer_freq(r.index) for r in r1]
-
-                r3 = pd.Series(r2, index=p_data3.index)
-                r3.loc[r3.isnull()] = 'Y'
-                r3.loc[r3.str.contains('H')] = 'H'
-                r3.loc[~(r3.str.contains('H') | r3.str.contains('Y'))] = 'D'
-                r3.loc[r3.str.contains('Y')] = np.nan
-                r3 = r3.fillna('ffill')
-                r4 = r3 == 'H'
-
-                p_data3 = p_data3[r4].copy()
-                # era4 = era4[era4.index.isin(p_data3.index)].copy()
-
                 p_data4 = p_data3.resample('D').sum()
                 era5 = era3.resample('D').sum()
 
@@ -230,14 +246,15 @@ try:
                 p_data5 = p_data4[p_data4.index.isin(era6.index)].copy()
                 p_data5[p_data5.precipitation <= 0.5] = 0
 
-                from_date = p_data5.index[0]
-                to_date = p_data5.index[-1]
+                # from_date = p_data5.index[0]
+                # to_date = p_data5.index[-1]
 
-                time_range = (to_date - from_date).days
-                year_range = int(time_range/365)
+                # time_range = (to_date - from_date).days
+                # year_range = int(time_range/365)
+                n_years = len(p_data5)/365
 
                 ## Package up for analysis
-                if year_range >= min_year_range:
+                if n_years >= min_year_range:
 
                     test_features_df = era6
                     test_features = np.array(test_features_df)
